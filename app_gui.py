@@ -4,10 +4,17 @@ import pyotp
 from pathlib import Path
 from kivy.app import App
 from kivy.clock import Clock
-from kivy.core.clipboard import Clipboard
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.widget import Widget
+from kivy.core.window import Window
+from kivy.animation import Animation
+from kivy.utils import platform
+from kivy.uix.screenmanager import ScreenManager, Screen
+try:
+    from plyer import storagepath
+except ImportError:
+    storagepath = None
 
 from kivymd.app import MDApp
 from kivymd.uix.screen import MDScreen
@@ -29,8 +36,33 @@ from kivymd.uix.menu import MDDropdownMenu
 from kivymd.toast import toast
 from kivymd.color_definitions import colors
 from kivymd.theming import ThemableBehavior
+from kivymd.uix.label import MDIcon
+import pyperclip
+from kivymd.uix.list import OneLineIconListItem
+from kivy.properties import StringProperty
+from kivymd.uix.list import IconLeftWidget
+from kivy.lang import Builder
+from kivy.uix.floatlayout import FloatLayout
+from kivy.storage.jsonstore import JsonStore
+import os
 
 from key_manager import KeyManager
+from settings_gui import SettingsScreen
+
+Builder.load_string("""
+<CustomOneLineIconListItem>:
+    IconLeftWidget:
+        icon: root.icon
+        theme_text_color: "Custom"
+        text_color: 0, 0, 0, 1
+""")
+
+class CustomOneLineIconListItem(OneLineIconListItem):
+    icon = StringProperty()
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.add_widget(IconLeftWidget(icon=self.icon, theme_text_color="Custom", text_color=(0, 0, 0, 1)))
 
 class AccountCard(MDCard, ThemableBehavior):
     def __init__(self, name, code="------", ttl=30, on_select=None, **kwargs):
@@ -39,69 +71,89 @@ class AccountCard(MDCard, ThemableBehavior):
         self.raw_code = code
         self.on_select = on_select
         self.orientation = "vertical"
-        self.elevation = 2
-        self.padding = (dp(16), dp(12), dp(16), dp(12))
+        self.elevation = 1
+        self.padding = (dp(24), dp(20), dp(24), dp(20))
         self.size_hint_y = None
-        self.height = dp(95)
+        self.height = dp(120)
         self.radius = [dp(16)]
         self.ripple_behavior = True
         self.selected = False
-        self.long_press_time = 2  # seconds
+        self.long_press_time = 1.5
         self._long_press_event = None
-        self.md_bg_color = self.theme_cls.bg_normal
         self._touch_in_progress = False
         self._was_long_press = False
-
-        # Top part: Account info and code
-        top_layout = MDBoxLayout(orientation="horizontal", adaptive_height=True, spacing=dp(16))
         
-        info_layout = MDBoxLayout(orientation="vertical", adaptive_height=True)
+        self.md_bg_color = self.theme_cls.bg_normal
+        self.line_color = (*self.theme_cls.divider_color[:3], 0.3)
 
+        top_layout = MDBoxLayout(orientation="horizontal", adaptive_height=True, spacing=dp(24))
+        info_layout = MDBoxLayout(orientation="vertical", adaptive_height=True, spacing=dp(4))
+        
         account_name = name
         if ":" in name:
             issuer, account_name = name.split(":", 1)
             self.issuer_label = MDLabel(
                 text=issuer.upper(),
-                font_style="Overline",
+                font_style="Caption",
                 theme_text_color="Secondary",
                 adaptive_height=True,
+                font_size=dp(12),
+                bold=True
             )
             info_layout.add_widget(self.issuer_label)
-
+            
         self.name_label = MDLabel(
             text=account_name,
-            font_style="Subtitle1",
+            font_style="H6",
             theme_text_color="Primary",
             adaptive_height=True,
+            font_size=dp(18),
+            bold=True,
+            size_hint_x=1,
+            shorten=False,
+            max_lines=2,
         )
         info_layout.add_widget(self.name_label)
-
+        
         self.code_label = MDLabel(
             text=self.format_code(code),
-            font_style="H3",
+            font_style="H4",
             theme_text_color="Primary",
             adaptive_size=True,
+            font_size=dp(32),
+            bold=True,
+            size_hint_x=None,
+            width=dp(180),
+            halign="right",
         )
-
+        
         top_layout.add_widget(info_layout)
-        top_layout.add_widget(Widget())  # Spacer
+        top_layout.add_widget(Widget())
         top_layout.add_widget(self.code_label)
-
-        # Bottom part: Progress bar and TTL
+        
         bottom_layout = MDBoxLayout(
             orientation="horizontal",
             adaptive_height=True,
-            spacing=dp(8),
-            padding=(0, dp(8), 0, 0),
+            spacing=dp(16),
+            padding=(0, dp(16), 0, 0),
         )
-
-        self.progress_bar = MDProgressBar(value=ttl / 30 * 100, size_hint_y=None, height=dp(5))
-
+        
+        self.progress_bar = MDProgressBar(
+            value=ttl / 30 * 100, 
+            size_hint_y=None, 
+            height=dp(4),
+            color=self.theme_cls.primary_color,
+            back_color=(*self.theme_cls.divider_color[:3], 0.4)
+        )
+        self.progress_bar.radius = [dp(2)]
+        
         self.ttl_label = MDLabel(
             text=f"{ttl}s",
             font_style="Body2",
             theme_text_color="Secondary",
             adaptive_size=True,
+            font_size=dp(14),
+            bold=True
         )
         
         bottom_layout.add_widget(self.progress_bar)
@@ -110,12 +162,10 @@ class AccountCard(MDCard, ThemableBehavior):
         self.add_widget(top_layout)
         self.add_widget(bottom_layout)
         
-        # Touch handling for tap/long-press
         self.bind(on_touch_down=self._on_touch_down, on_touch_up=self._on_touch_up)
         self.update_selected_visual()
 
     def format_code(self, code):
-        """Format 6-digit code with space in middle"""
         if len(code) == 6 and code.isdigit():
             return f"{code[:3]} {code[3:]}"
         return code
@@ -125,35 +175,43 @@ class AccountCard(MDCard, ThemableBehavior):
             touch.grab(self)
             self._touch_in_progress = True
             self._was_long_press = False
+            anim = Animation(elevation=4, md_bg_color=self.theme_cls.bg_light, duration=0.1)
+            anim.start(self)
             self._long_press_event = Clock.schedule_once(lambda dt: self._on_long_press(touch), self.long_press_time)
+            return True
         return super().on_touch_down(touch)
 
     def _on_touch_up(self, instance, touch):
-        try:
-            if touch.grab_current is self and self in touch.grab_list:
+        if self.collide_point(*touch.pos):
+            if not self.selected:
+                anim = Animation(elevation=1, md_bg_color=self.theme_cls.bg_normal, duration=0.2)
+                anim.start(self)
+            if touch.grab_current is self:
                 touch.ungrab(self)
-        except ValueError:
-            pass
-        if self._long_press_event:
-            if self._long_press_event.is_triggered:
+            if self._long_press_event:
+                if self._long_press_event.is_triggered:
+                    self._long_press_event = None
+                    self._touch_in_progress = False
+                    self._was_long_press = False
+                    return True
+                self._long_press_event.cancel()
                 self._long_press_event = None
-                self._touch_in_progress = False
-                self._was_long_press = False
-                return super().on_touch_up(touch)
-            self._long_press_event.cancel()
-            self._long_press_event = None
-        # Only toggle selection if this was NOT a long-press
-        if not self._was_long_press and self.on_select and self.collide_point(*touch.pos):
-            self.on_select(self.name)
-        self._touch_in_progress = False
-        self._was_long_press = False
+            if not self._was_long_press and self.on_select and self.collide_point(*touch.pos):
+                self.on_select(self.name)
+            self._touch_in_progress = False
+            self._was_long_press = False
+            return True
         return super().on_touch_up(touch)
 
     def _on_long_press(self, touch):
         if getattr(self, '_touch_in_progress', False):
-            Clipboard.copy(self.raw_code)
-            toast(f"Copied code for {self.name}")
+            pyperclip.copy(self.raw_code)
+            toast(f"Copied {self.raw_code}")
             self._was_long_press = True
+            original_color = self.md_bg_color
+            anim = Animation(md_bg_color=(*self.theme_cls.accent_color[:3], 0.3), duration=0.1) + \
+                   Animation(md_bg_color=original_color, duration=0.3)
+            anim.start(self)
         self._long_press_event = None
         self._touch_in_progress = False
 
@@ -163,35 +221,26 @@ class AccountCard(MDCard, ThemableBehavior):
 
     def update_selected_visual(self):
         if self.selected:
-            # Use a much darker blue (Blue 900 or custom dark blue)
-            self.md_bg_color = (0.07, 0.18, 0.36, 1)  # Custom dark blue RGBA
-            self.name_label.theme_text_color = "Custom"
-            self.name_label.text_color = (1, 1, 1, 1)
-            if hasattr(self, 'issuer_label'):
-                self.issuer_label.theme_text_color = "Custom"
-                self.issuer_label.text_color = (0.8, 0.9, 1, 1)
-            self.code_label.theme_text_color = "Custom"
-            self.code_label.text_color = (1, 1, 1, 1)
+            primary_color = self.theme_cls.primary_color
+            self.md_bg_color = (*primary_color[:3], 0.2)
+            self.elevation = 6
+            self.line_color = (*self.theme_cls.primary_color[:3], 0.8)
         else:
             self.md_bg_color = self.theme_cls.bg_normal
-            self.name_label.theme_text_color = "Primary"
-            if hasattr(self, 'issuer_label'):
-                self.issuer_label.theme_text_color = "Secondary"
-            self.code_label.theme_text_color = "Primary"
+            self.elevation = 1
+            self.line_color = (*self.theme_cls.divider_color[:3], 0.3)
 
     def update_code(self, code, ttl):
         self.raw_code = code
         self.code_label.text = self.format_code(code)
         self.ttl_label.text = f"{ttl}s"
         
-        # Update progress bar value and color
         progress_value = ttl / 30 * 100
         self.progress_bar.value = progress_value
         
-        # Change color based on time remaining
-        if ttl > 10:
+        if ttl > 15:
             self.progress_bar.color = self.theme_cls.primary_color
-        elif ttl > 5:
+        elif ttl > 8:
             self.progress_bar.color = self.theme_cls.accent_color
         else:
             self.progress_bar.color = self.theme_cls.error_color
@@ -204,41 +253,108 @@ class ModernAuthenticatorApp(MDApp):
         self.account_cards = {}
         self.dialog = None
         self.file_manager = None
-        
-        # Theme configuration
-        self.theme_cls.primary_palette = "Blue"
-        self.theme_cls.accent_palette = "Orange"
-        self.theme_cls.primary_hue = "500"
-        self.theme_cls.theme_style = "Light"
-        self.theme_cls.material_style = "M3"
+        from kivy.uix.screenmanager import ScreenManager
+        self.screen_manager = ScreenManager()
+        # Theme persistence
+        self.theme_store = None
+        self.theme_pref_path = None
+
+    @property
+    def user_data_dir(self):
+        import os
+        if platform == "android":
+            return super().user_data_dir
+        home = os.path.expanduser("~")
+        if platform == "win":
+            base = os.getenv("APPDATA", home)
+            return os.path.join(base, "Tautth")
+        elif platform == "macosx":
+            return os.path.join(home, "Library", "Application Support", "Tautth")
+        else:
+            return os.path.join(home, ".local", "share", "Tautth")
+
+    def _init_theme_store(self):
+        if self.theme_store is not None:
+            return  # Already initialized
+        try:
+            base_dir = self.user_data_dir
+            print(f"[ThemeStore] Using user_data_dir: {base_dir}")
+        except AttributeError:
+            base_dir = os.path.expanduser("~/.authenticator")
+            print(f"[ThemeStore] Using fallback dir: {base_dir}")
+        if not os.path.exists(base_dir):
+            os.makedirs(base_dir, exist_ok=True)
+            print(f"[ThemeStore] Created directory: {base_dir}")
+        self.theme_pref_path = os.path.join(base_dir, "theme_prefs.json")
+        print(f"[ThemeStore] Theme preference path: {self.theme_pref_path}")
+        self.theme_store = JsonStore(self.theme_pref_path)
+        print(f"[ThemeStore] JsonStore initialized: {self.theme_store}")
+
+    def load_theme_prefs(self):
+        self._init_theme_store()  # Ensure store is initialized
+        if self.theme_store and self.theme_store.exists('theme'):
+            theme = self.theme_store.get('theme')
+            print(f"[ThemeStore] Loaded theme from store: {theme}")
+            self.theme_cls.primary_palette = theme.get('primary_palette', 'DeepOrange')
+            self.theme_cls.theme_style = theme.get('theme_style', 'Light')
+        else:
+            print("[ThemeStore] No theme found in store, using defaults.")
+            self.theme_cls.primary_palette = 'DeepOrange'
+            self.theme_cls.theme_style = 'Light'
+            self.save_theme_prefs()
+        print(f"[ThemeStore] Theme after load: palette={self.theme_cls.primary_palette}, style={self.theme_cls.theme_style}")
+
+    def save_theme_prefs(self):
+        self._init_theme_store()  # Ensure store is initialized
+        print(f"[ThemeStore] save_theme_prefs called, self id: {id(self)}, theme_store: {self.theme_store}")
+        if self.theme_store is not None:
+            self.theme_store.put('theme',
+                primary_palette=self.theme_cls.primary_palette,
+                theme_style=self.theme_cls.theme_style)
+            print(f"[ThemeStore] Saved theme: palette={self.theme_cls.primary_palette}, style={self.theme_cls.theme_style}")
+        else:
+            print("[ThemeStore] ERROR: theme_store is not initialized after _init_theme_store!")
 
     def build(self):
-        self.title = "Authenticator"
+        self._init_theme_store()
+        self.load_theme_prefs()
+        self.theme_cls.primary_hue = "500"
+        self.theme_cls.accent_palette = "Blue"
+        self.theme_cls.accent_hue = "400"
+        self.theme_cls.material_style = "M3"
+        
+        self.title = "Tautth"
+        
+        Window.clearcolor = self.theme_cls.bg_darkest
+        
+        self.screen_manager = ScreenManager()
         
         # Main screen
-        screen = MDScreen()
-        
-        # Main layout
+        main_screen = Screen(name="main")
         main_layout = MDBoxLayout(orientation="vertical")
         
-        # Top app bar
         self.toolbar = MDTopAppBar(
-            title="Authenticator",
+            title="Tautth",
             md_bg_color=self.theme_cls.primary_color,
-            specific_text_color="#FFFFFF",
+            elevation=0,
+            anchor_title="left",
             right_action_items=[
-                ["plus", lambda x: self.show_add_dialog()],
-                ["dots-vertical", lambda x: self.show_menu(x)]
+                ["plus-circle", lambda x: self.show_add_dialog()],
+                ["menu", lambda x: self.show_menu(x)]
             ]
         )
         
-        # Scrollable content
-        self.scroll = MDScrollView()
+        self.scroll = MDScrollView(
+            md_bg_color=(0, 0, 0, 0),
+            bar_color=self.theme_cls.primary_color,
+            bar_inactive_color=(*self.theme_cls.primary_color[:3], 0.3)
+        )
+        
         self.accounts_layout = MDBoxLayout(
             orientation="vertical",
             adaptive_height=True,
-            spacing=dp(12),
-            padding=[dp(16), dp(16)]
+            spacing=dp(16),
+            padding=[dp(20), dp(24), dp(20), dp(24)]
         )
         
         self.scroll.add_widget(self.accounts_layout)
@@ -246,42 +362,73 @@ class ModernAuthenticatorApp(MDApp):
         main_layout.add_widget(self.toolbar)
         main_layout.add_widget(self.scroll)
         
-        screen.add_widget(main_layout)
+        main_screen.add_widget(main_layout)
+
+        overlay = FloatLayout()
+        version_label = MDLabel(
+            text="V0.1 Alpha",
+            halign="right",
+            valign="bottom",
+            theme_text_color="Custom",
+            text_color=(0, 0, 0, 0.3),
+            font_style="Caption",
+            size_hint=(None, None),
+            size=(dp(80), dp(24)),
+            pos_hint={"right": 1.0, "y": 0.0},
+            padding=(0, dp(2))
+        )
+        overlay.add_widget(version_label)
+        main_screen.add_widget(overlay)
         
-        # Initialize
+        self.screen_manager.add_widget(main_screen)
+        
+        # Settings screen
+        settings_screen = SettingsScreen(name="settings", app=self)
+        self.screen_manager.add_widget(settings_screen)
+        
         self.refresh_accounts()
         self.start_timer()
         
-        return screen
+        return self.screen_manager
     
     def show_menu(self, instance):
         menu_items = [
             {
+                "viewclass": "CustomOneLineIconListItem",
                 "text": "Edit Selected",
-                "viewclass": "OneLineListItem",
+                "icon": "pencil",
                 "on_release": lambda: self.menu_callback("edit"),
             },
             {
+                "viewclass": "CustomOneLineIconListItem",
                 "text": "Remove Selected",
-                "viewclass": "OneLineListItem",
+                "icon": "delete",
                 "on_release": lambda: self.menu_callback("remove"),
             },
             {
+                "viewclass": "CustomOneLineIconListItem",
                 "text": "Backup Data",
-                "viewclass": "OneLineListItem",
+                "icon": "content-save",
                 "on_release": lambda: self.menu_callback("backup"),
             },
             {
+                "viewclass": "CustomOneLineIconListItem",
                 "text": "Restore Data",
-                "viewclass": "OneLineListItem",
+                "icon": "folder",
                 "on_release": lambda: self.menu_callback("restore"),
+            },
+            {
+                "viewclass": "CustomOneLineIconListItem",
+                "text": "Settings",
+                "icon": "cog",
+                "on_release": lambda: self.menu_callback("settings"),
             },
         ]
         
         self.menu = MDDropdownMenu(
             caller=instance,
             items=menu_items,
-            width_mult=4,
+            elevation=0
         )
         self.menu.open()
     
@@ -296,6 +443,21 @@ class ModernAuthenticatorApp(MDApp):
             self.backup()
         elif action == "restore":
             self.restore()
+        elif action == "settings":
+            self.show_settings()
+    
+    def show_settings(self):
+        self.screen_manager.current = "settings"
+        self.screen_manager.transition.direction = "left"
+
+    def change_theme(self, color):
+        self.theme_cls.primary_palette = color
+        self.toolbar.md_bg_color = self.theme_cls.primary_color
+        for card in self.account_cards.values():
+            card.update_selected_visual()
+            card.progress_bar.color = self.theme_cls.primary_color
+        self.save_theme_prefs()
+        print(f"[ThemeStore] change_theme called: palette={color}")
     
     def start_timer(self):
         Clock.schedule_interval(self.update_codes, 1)
@@ -304,20 +466,27 @@ class ModernAuthenticatorApp(MDApp):
         toast(message)
     
     def show_add_dialog(self):
-        content = MDBoxLayout(orientation="vertical", spacing=dp(16), adaptive_height=True)
+        content = MDBoxLayout(
+            orientation="vertical", 
+            spacing=dp(20), 
+            adaptive_height=True,
+            padding=[dp(4), dp(8)]
+        )
         
         self.name_field = MDTextField(
             hint_text="Account name (e.g., Google, GitHub)",
             required=True,
             helper_text_mode="on_error",
-            helper_text="This field is required"
+            helper_text="This field is required",
+            line_color_focus=self.theme_cls.primary_color,
         )
         
         self.secret_field = MDTextField(
             hint_text="TOTP secret key",
             required=True,
             helper_text_mode="on_error",
-            helper_text="Enter the secret key from your service"
+            helper_text="Enter the secret key from your service",
+            line_color_focus=self.theme_cls.primary_color,
         )
         
         content.add_widget(self.name_field)
@@ -331,11 +500,12 @@ class ModernAuthenticatorApp(MDApp):
                 MDFlatButton(
                     text="CANCEL",
                     theme_text_color="Custom",
-                    text_color=self.theme_cls.primary_color,
+                    text_color=self.theme_cls.disabled_hint_text_color,
                     on_release=self.close_dialog
                 ),
                 MDRaisedButton(
                     text="ADD",
+                    md_bg_color=self.theme_cls.primary_color,
                     on_release=self.add_account
                 ),
             ],
@@ -372,17 +542,25 @@ class ModernAuthenticatorApp(MDApp):
             return
 
         self.dialog_content = MDBoxLayout(
-            orientation="vertical", spacing=dp(16), adaptive_height=True
+            orientation="vertical", 
+            spacing=dp(20), 
+            adaptive_height=True,
+            padding=[dp(4), dp(8)]
         )
         
         self.edit_secret_field = MDTextField(
             hint_text="New TOTP secret key",
             required=True,
             helper_text_mode="on_error",
-            helper_text="Enter the new secret key"
+            helper_text="Enter the new secret key",
+            line_color_focus=self.theme_cls.primary_color,
         )
         
-        self.dialog_content.add_widget(MDLabel(text=f"Updating: {self.selected_account}", theme_text_color="Secondary"))
+        self.dialog_content.add_widget(MDLabel(
+            text=f"Updating: {self.selected_account}", 
+            theme_text_color="Secondary",
+            font_style="Body2"
+        ))
         self.dialog_content.add_widget(self.edit_secret_field)
         
         self.dialog = MDDialog(
@@ -393,11 +571,12 @@ class ModernAuthenticatorApp(MDApp):
                 MDFlatButton(
                     text="CANCEL",
                     theme_text_color="Custom",
-                    text_color=self.theme_cls.primary_color,
+                    text_color=self.theme_cls.disabled_hint_text_color,
                     on_release=self.close_dialog
                 ),
                 MDRaisedButton(
                     text="UPDATE",
+                    md_bg_color=self.theme_cls.primary_color,
                     on_release=self.update_account
                 ),
             ],
@@ -416,7 +595,6 @@ class ModernAuthenticatorApp(MDApp):
             return
         
         try:
-            # Validate the new secret before updating
             pyotp.TOTP(new_secret).now()
             self.km.update_key(self.selected_account, new_secret)
             self.show_snackbar(f"Updated {self.selected_account}")
@@ -449,7 +627,19 @@ class ModernAuthenticatorApp(MDApp):
                 exit_manager=self.exit_file_manager,
                 select_path=self.select_backup_path,
             )
-        self.file_manager.show(str(Path.home()))
+        if platform == 'android' and storagepath is not None:
+            get_docs = getattr(storagepath, 'get_documents_dir', None)
+            get_ext = getattr(storagepath, 'get_external_storage_dir', None)
+            start_dir = None
+            if callable(get_docs):
+                start_dir = get_docs()
+            if not start_dir and callable(get_ext):
+                start_dir = get_ext()
+            if not start_dir:
+                start_dir = "/sdcard"
+        else:
+            start_dir = self.user_data_dir
+        self.file_manager.show(str(start_dir))
         self.backup_mode = True
     
     def restore(self):
@@ -458,7 +648,19 @@ class ModernAuthenticatorApp(MDApp):
                 exit_manager=self.exit_file_manager,
                 select_path=self.select_restore_path,
             )
-        self.file_manager.show(str(Path.home()))
+        if platform == 'android' and storagepath is not None:
+            get_docs = getattr(storagepath, 'get_documents_dir', None)
+            get_ext = getattr(storagepath, 'get_external_storage_dir', None)
+            start_dir = None
+            if callable(get_docs):
+                start_dir = get_docs()
+            if not start_dir and callable(get_ext):
+                start_dir = get_ext()
+            if not start_dir:
+                start_dir = "/sdcard"
+        else:
+            start_dir = self.user_data_dir
+        self.file_manager.show(str(start_dir))
         self.backup_mode = False
     
     def exit_file_manager(self, *args):
@@ -471,11 +673,17 @@ class ModernAuthenticatorApp(MDApp):
         self.show_backup_dialog(path)
     
     def show_backup_dialog(self, directory):
-        content = MDBoxLayout(orientation="vertical", spacing=dp(16), adaptive_height=True)
+        content = MDBoxLayout(
+            orientation="vertical", 
+            spacing=dp(20), 
+            adaptive_height=True,
+            padding=[dp(4), dp(8)]
+        )
         
         self.backup_filename_field = MDTextField(
             hint_text="Backup filename",
-            text="authenticator_backup.bak"
+            text="authenticator_backup.bak",
+            line_color_focus=self.theme_cls.primary_color,
         )
         
         self.backup_password_field = MDTextField(
@@ -483,10 +691,15 @@ class ModernAuthenticatorApp(MDApp):
             password=True,
             required=True,
             helper_text_mode="on_error",
-            helper_text="Password is required for encryption"
+            helper_text="Password is required for encryption",
+            line_color_focus=self.theme_cls.primary_color,
         )
         
-        content.add_widget(MDLabel(text=f"Location: {directory}", theme_text_color="Secondary"))
+        content.add_widget(MDLabel(
+            text=f"Location: {directory}", 
+            theme_text_color="Secondary",
+            font_style="Body2"
+        ))
         content.add_widget(self.backup_filename_field)
         content.add_widget(self.backup_password_field)
         
@@ -498,11 +711,12 @@ class ModernAuthenticatorApp(MDApp):
                 MDFlatButton(
                     text="CANCEL",
                     theme_text_color="Custom",
-                    text_color=self.theme_cls.primary_color,
+                    text_color=self.theme_cls.disabled_hint_text_color,
                     on_release=self.close_dialog
                 ),
                 MDRaisedButton(
                     text="BACKUP",
+                    md_bg_color=self.theme_cls.primary_color,
                     on_release=lambda x: self.create_backup(directory)
                 ),
             ],
@@ -538,7 +752,7 @@ class ModernAuthenticatorApp(MDApp):
             buttons=[
                 MDRaisedButton(
                     text="OK",
-                    md_bg_color=colors["Red"]["500"],
+                    md_bg_color=self.theme_cls.error_color,
                     on_release=self.close_dialog
                 ),
             ],
@@ -551,7 +765,6 @@ class ModernAuthenticatorApp(MDApp):
             self.dialog = None
     
     def on_account_select(self, name):
-        # If already selected, unselect
         if self.selected_account == name:
             self.selected_account = None
             for card in self.account_cards.values():
@@ -568,25 +781,29 @@ class ModernAuthenticatorApp(MDApp):
         
         keys = self.km.get_keys()
         if not keys:
-            # Empty state
             empty_layout = MDBoxLayout(
                 orientation="vertical",
                 adaptive_height=True,
-                spacing=dp(16),
-                padding=[dp(32), dp(64)]
+                spacing=dp(20),
+                padding=[dp(40), dp(80)]
             )
+            
+
             
             empty_layout.add_widget(MDLabel(
                 text="No accounts yet",
-                theme_text_color="Secondary",
+                theme_text_color="Primary",
                 font_style="H5",
-                halign="center"
+                halign="center",
+                font_size=dp(24)
             ))
             
             empty_layout.add_widget(MDLabel(
-                text="Tap the + button to add your first account",
+                text="Tap the plus button to add your first account",
                 theme_text_color="Secondary",
-                halign="center"
+                font_style="Body1",
+                halign="center",
+                font_size=dp(16)
             ))
             
             self.accounts_layout.add_widget(empty_layout)
@@ -617,16 +834,29 @@ class ModernAuthenticatorApp(MDApp):
         self.show_restore_dialog(path)
 
     def show_restore_dialog(self, filepath):
-        content = MDBoxLayout(orientation="vertical", spacing=dp(16), adaptive_height=True)
+        content = MDBoxLayout(
+            orientation="vertical", 
+            spacing=dp(20), 
+            adaptive_height=True,
+            padding=[dp(4), dp(8)]
+        )
+        
         self.restore_password_field = MDTextField(
             hint_text="Backup password",
             password=True,
             required=True,
             helper_text_mode="on_error",
-            helper_text="Enter the password used for encryption"
+            helper_text="Enter the password used for encryption",
+            line_color_focus=self.theme_cls.primary_color,
         )
-        content.add_widget(MDLabel(text=f"File: {Path(filepath).name}", theme_text_color="Secondary"))
+        
+        content.add_widget(MDLabel(
+            text=f"File: {Path(filepath).name}", 
+            theme_text_color="Secondary",
+            font_style="Body2"
+        ))
         content.add_widget(self.restore_password_field)
+        
         self.dialog = MDDialog(
             title="Restore Backup",
             type="custom",
@@ -635,11 +865,12 @@ class ModernAuthenticatorApp(MDApp):
                 MDFlatButton(
                     text="CANCEL",
                     theme_text_color="Custom",
-                    text_color=self.theme_cls.primary_color,
+                    text_color=self.theme_cls.disabled_hint_text_color,
                     on_release=self.close_dialog
                 ),
                 MDRaisedButton(
                     text="RESTORE",
+                    md_bg_color=self.theme_cls.primary_color,
                     on_release=lambda x: self.restore_backup(filepath)
                 ),
             ],
@@ -658,6 +889,11 @@ class ModernAuthenticatorApp(MDApp):
             self.close_dialog()
         except Exception:
             self.show_error_dialog("Failed to restore - check password and file")
+
+    def toggle_dark_mode(self, active):
+        self.theme_cls.theme_style = 'Dark' if active else 'Light'
+        self.save_theme_prefs()
+        print(f"[ThemeStore] toggle_dark_mode called: style={'Dark' if active else 'Light'}")
 
 if __name__ == '__main__':
     ModernAuthenticatorApp().run()
