@@ -1,0 +1,153 @@
+from kivy.metrics import dp
+from kivy.uix.widget import Widget
+from kivymd.uix.screen import MDScreen
+from kivymd.uix.toolbar import MDTopAppBar
+from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.scrollview import MDScrollView
+from kivymd.uix.label import MDLabel
+from kivy.uix.floatlayout import FloatLayout
+from kivymd.uix.menu import MDDropdownMenu
+from app.ui.components.custom_widgets import CustomOneLineIconListItem
+
+class MainScreen(MDScreen):
+    def __init__(self, app, **kwargs):
+        super().__init__(**kwargs)
+        self.app = app
+        self.name = "main"
+        self.layout = MDBoxLayout(orientation="vertical")
+        
+        self.toolbar = MDTopAppBar(
+            title="Tautth",
+            md_bg_color=self.app.theme_cls.primary_color,
+            elevation=0,
+            anchor_title="left",
+            right_action_items=[
+                ["plus-circle", lambda x: self.app.show_add_dialog()],
+                ["menu", lambda x: self.show_menu(x)]
+            ]
+        )
+        
+        self.scroll = MDScrollView(
+            md_bg_color=(0, 0, 0, 0),
+            bar_color=self.app.theme_cls.primary_color,
+            bar_inactive_color=(*self.app.theme_cls.primary_color[:3], 0.3)
+        )
+        
+        self.accounts_layout = MDBoxLayout(
+            orientation="vertical",
+            adaptive_height=True,
+            spacing=dp(16),
+            padding=[dp(20), dp(24), dp(20), dp(24)]
+        )
+        
+        self.scroll.add_widget(self.accounts_layout)
+        
+        self.layout.add_widget(self.toolbar)
+        self.layout.add_widget(self.scroll)
+        
+        self.add_widget(self.layout)
+
+        self.overlay = FloatLayout()
+        version_label = MDLabel(
+            text="V0.1 Alpha",
+            halign="right",
+            valign="bottom",
+            theme_text_color="Custom",
+            text_color=(0, 0, 0, 0.3),
+            font_style="Caption",
+            size_hint=(None, None),
+            size=(dp(80), dp(24)),
+            pos_hint={"right": 1.0, "y": 0.0},
+            padding=(0, dp(2))
+        )
+        self.overlay.add_widget(version_label)
+        self.add_widget(self.overlay)
+
+        # Initialize empty message layout and its labels
+        self.empty_message_layout = MDBoxLayout(
+            orientation="vertical",
+            adaptive_height=True,
+            spacing=dp(20),
+            padding=[dp(40), dp(80)],
+            pos_hint={'center_x': 0.5, 'center_y': 0.5},
+            size_hint=(1, None), # Will be sized dynamically
+            md_bg_color=self.app.theme_cls.bg_normal
+        )
+        self.empty_message_label_1 = MDLabel(
+            text="No accounts yet",
+            theme_text_color="Primary",
+            font_style="H5",
+            halign="center",
+            font_size=dp(24)
+        )
+        self.empty_message_label_2 = MDLabel(
+            text="Tap the plus button to add your first account",
+            theme_text_color="Secondary",
+            font_style="Body1",
+            halign="center",
+            font_size=dp(16)
+        )
+        self.empty_message_layout.add_widget(self.empty_message_label_1)
+        self.empty_message_layout.add_widget(self.empty_message_label_2)
+        self.layout.add_widget(self.empty_message_layout) # Add to main layout
+        self.empty_message_layout.opacity = 0 # Start hidden
+        self.empty_message_layout.height = 0 # Start with no height
+        self.empty_message_layout.disabled = True # Disable interaction
+
+    def show_menu(self, instance):
+        menu_items = [
+            {
+                "viewclass": "CustomOneLineIconListItem",
+                "text": "Edit Selected",
+                "icon": "pencil",
+                "on_release": lambda: self.app.menu_callback("edit"),
+            },
+            {
+                "viewclass": "CustomOneLineIconListItem",
+                "text": "Remove Selected",
+                "icon": "delete",
+                "on_release": lambda: self.app.menu_callback("remove"),
+            },
+            {
+                "viewclass": "CustomOneLineIconListItem",
+                "text": "Backup Data",
+                "icon": "content-save",
+                "on_release": lambda: self.app.menu_callback("backup"),
+            },
+            {
+                "viewclass": "CustomOneLineIconListItem",
+                "text": "Restore Data",
+                "icon": "folder",
+                "on_release": lambda: self.app.menu_callback("restore"),
+            },
+            {
+                "viewclass": "CustomOneLineIconListItem",
+                "text": "Settings",
+                "icon": "cog",
+                "on_release": lambda: self.app.menu_callback("settings"),
+            },
+            {
+                "viewclass": "CustomOneLineIconListItem",
+                "text": "Icon Preview",
+                "icon": "eye",
+                "on_release": lambda: self.app.menu_callback("icon_preview"),
+            },
+        ]
+        
+        self.menu = MDDropdownMenu(
+            caller=instance,
+            items=menu_items,
+            elevation=0
+        )
+        self.menu.open()
+
+    def show_empty_message(self):
+        self.accounts_layout.clear_widgets()
+        self.empty_message_layout.opacity = 1
+        self.empty_message_layout.height = self.height # Make it visible and take up space
+        self.empty_message_layout.disabled = False # Enable interaction if needed
+
+    def hide_empty_message(self):
+        self.empty_message_layout.opacity = 0
+        self.empty_message_layout.height = 0 # Hide it and make it take no space
+        self.empty_message_layout.disabled = True # Disable interaction

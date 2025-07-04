@@ -7,13 +7,14 @@ from kivymd.uix.scrollview import MDScrollView
 from kivymd.uix.list import MDList, OneLineAvatarIconListItem, TwoLineAvatarIconListItem, IconLeftWidget, IconRightWidget
 from kivymd.uix.label import MDLabel
 from kivymd.uix.card import MDCard
-from kivy.uix.switch import Switch
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.button import MDFlatButton, MDRaisedButton, MDIconButton
 from kivymd.uix.gridlayout import MDGridLayout
 from kivymd.uix.behaviors import RoundedRectangularElevationBehavior
 from kivy.lang import Builder
 from kivy.factory import Factory
+from kivymd.uix.selectioncontrol import MDSwitch
+from kivy.clock import Clock
 
 class ColorCard(MDCard, RoundedRectangularElevationBehavior):
     def __init__(self, color_name, color_code, kivymd_name, on_select=None, **kwargs):
@@ -48,7 +49,6 @@ class SettingsScreen(MDScreen):
             title="Settings",
             elevation=1,
             left_action_items=[["arrow-left", lambda x: self.go_back()]],
-            right_action_items=[["information-outline", lambda x: self.show_about()]],
         )
         layout.add_widget(toolbar)
         
@@ -101,13 +101,13 @@ class SettingsScreen(MDScreen):
         card.add_widget(header)
         
         # App Version
-        version_item = TwoLineAvatarIconListItem(
+        self.version_item = TwoLineAvatarIconListItem(
             text="Version",
-            secondary_text="v1.0.2 (Build 2025.1)",
+            secondary_text=self.app.app_config.VERSION,
             theme_text_color="Primary"
         )
-        version_item.add_widget(IconLeftWidget(icon="information-outline"))
-        card.add_widget(version_item)
+        self.version_item.add_widget(IconLeftWidget(icon="information-outline"))
+        card.add_widget(self.version_item)
         
         return card
     
@@ -142,38 +142,26 @@ class SettingsScreen(MDScreen):
         card.add_widget(theme_item)
         
         # Dark Mode Toggle
-        dark_mode_layout = MDBoxLayout(
-            orientation="horizontal",
-            adaptive_height=True,
-            padding=[0, dp(8)],
-            spacing=dp(16)
-        )
-        
-        dark_mode_info = MDBoxLayout(orientation="vertical", adaptive_height=True)
-        dark_mode_info.add_widget(MDLabel(
+        dark_mode_item = TwoLineAvatarIconListItem(
             text="Dark Mode",
-            font_style="Body1",
+            secondary_text="Switch between light and dark themes",
             theme_text_color="Primary",
-            adaptive_height=True
-        ))
-        dark_mode_info.add_widget(MDLabel(
-            text="Switch between light and dark themes",
-            font_style="Caption",
-            theme_text_color="Secondary",
-            adaptive_height=True
-        ))
-        
-        dark_mode_switch = Switch(
-            size_hint=(None, None),
-            size=(dp(48), dp(48)),
-            pos_hint={"center_y": 0.5},
-            on_active=self.toggle_dark_mode
+            secondary_theme_text_color="Secondary"
         )
+        dark_mode_item.add_widget(IconLeftWidget(icon="weather-night"))
         
-        dark_mode_layout.add_widget(IconLeftWidget(icon="weather-night"))
-        dark_mode_layout.add_widget(dark_mode_info)
-        dark_mode_layout.add_widget(dark_mode_switch)
-        card.add_widget(dark_mode_layout)
+        right_widget = IconRightWidget()
+        self.dark_mode_switch = MDSwitch(
+            thumb_color_active="white",
+            thumb_color_inactive="white",
+            track_color_active=self.app.theme_cls.primary_color,
+            track_color_inactive=[0.7, 0.7, 0.7, 1]
+        )
+        self.dark_mode_switch.bind(active=self.toggle_dark_mode)
+        right_widget.add_widget(self.dark_mode_switch)
+        dark_mode_item.add_widget(right_widget)
+        
+        card.add_widget(dark_mode_item)
         
         return card
     
@@ -198,74 +186,42 @@ class SettingsScreen(MDScreen):
         card.add_widget(header)
         
         # Notifications
-        notif_layout = MDBoxLayout(
-            orientation="horizontal",
-            adaptive_height=True,
-            padding=[0, dp(8)],
-            spacing=dp(16)
-        )
-        
-        notif_info = MDBoxLayout(orientation="vertical", adaptive_height=True)
-        notif_info.add_widget(MDLabel(
+        notif_item = TwoLineAvatarIconListItem(
             text="Push Notifications",
-            font_style="Body1",
-            theme_text_color="Primary",
-            adaptive_height=True
-        ))
-        notif_info.add_widget(MDLabel(
-            text="Receive app notifications",
-            font_style="Caption",
-            theme_text_color="Secondary",
-            adaptive_height=True
-        ))
-        
-        notif_switch = Switch(
-            size_hint=(None, None),
-            size=(dp(48), dp(48)),
-            pos_hint={"center_y": 0.5},
-            active=True,
-            on_active=self.toggle_notifications
+            secondary_text="Receive app notifications (NOT WORKING)"
         )
+        notif_item.add_widget(IconLeftWidget(icon="bell"))
         
-        notif_layout.add_widget(IconLeftWidget(icon="bell"))
-        notif_layout.add_widget(notif_info)
-        notif_layout.add_widget(notif_switch)
-        card.add_widget(notif_layout)
+        right_notif_widget = IconRightWidget()
+        self.notif_switch = MDSwitch(
+            thumb_color_active="white",
+            thumb_color_inactive="white",
+            track_color_active=self.app.theme_cls.primary_color,
+            track_color_inactive=[0.7, 0.7, 0.7, 1]
+        )
+        self.notif_switch.bind(active=self.toggle_notifications)
+        right_notif_widget.add_widget(self.notif_switch)
+        notif_item.add_widget(right_notif_widget)
+        card.add_widget(notif_item)
         
         # Auto-sync
-        sync_layout = MDBoxLayout(
-            orientation="horizontal",
-            adaptive_height=True,
-            padding=[0, dp(8)],
-            spacing=dp(16)
-        )
-        
-        sync_info = MDBoxLayout(orientation="vertical", adaptive_height=True)
-        sync_info.add_widget(MDLabel(
+        sync_item = TwoLineAvatarIconListItem(
             text="Auto-sync",
-            font_style="Body1",
-            theme_text_color="Primary",
-            adaptive_height=True
-        ))
-        sync_info.add_widget(MDLabel(
-            text="Automatically sync data",
-            font_style="Caption",
-            theme_text_color="Secondary",
-            adaptive_height=True
-        ))
-        
-        sync_switch = Switch(
-            size_hint=(None, None),
-            size=(dp(48), dp(48)),
-            pos_hint={"center_y": 0.5},
-            active=True,
-            on_active=self.toggle_auto_sync
+            secondary_text="Automatically sync data (NOT WORKING)"
         )
+        sync_item.add_widget(IconLeftWidget(icon="sync"))
         
-        sync_layout.add_widget(IconLeftWidget(icon="sync"))
-        sync_layout.add_widget(sync_info)
-        sync_layout.add_widget(sync_switch)
-        card.add_widget(sync_layout)
+        right_sync_widget = IconRightWidget()
+        self.sync_switch = MDSwitch(
+            thumb_color_active="white",
+            thumb_color_inactive="white",
+            track_color_active=self.app.theme_cls.primary_color,
+            track_color_inactive=[0.7, 0.7, 0.7, 1]
+        )
+        self.sync_switch.bind(active=self.toggle_auto_sync)
+        right_sync_widget.add_widget(self.sync_switch)
+        sync_item.add_widget(right_sync_widget)
+        card.add_widget(sync_item)
         
         return card
     
@@ -409,7 +365,7 @@ class SettingsScreen(MDScreen):
         """Show about dialog"""
         dialog = MDDialog(
             title="About This App",
-            text="A modern, Material Design application built with KivyMD.\n\nVersion: 1.0.2\nBuild: 2025.1\n\nDeveloped with ❤️",
+            text=f"A modern, Material Design application built with KivyMD.\n\nVersion: {self.app.app_config.VERSION}\n\nDeveloped with ❤️",
             buttons=[
                 MDRaisedButton(
                     text="OK",
@@ -436,6 +392,12 @@ class SettingsScreen(MDScreen):
         if self.app and hasattr(self.app, 'show_snackbar'):
             self.app.show_snackbar(message)
     
+    def on_pre_enter(self, *args):
+        """Event fired when the screen is about to be displayed."""
+        self.dark_mode_switch.active = self.app.theme_cls.theme_style == "Dark"
+        self.notif_switch.active = True
+        self.sync_switch.active = True
+
     def go_back(self):
         """Navigate back to main screen"""
         self.manager.current = "main"
