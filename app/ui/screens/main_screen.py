@@ -95,41 +95,56 @@ class MainScreen(MDScreen):
         self.empty_message_layout.disabled = True # Disable interaction
 
     def show_menu(self, instance):
+        # Determine icon color based on theme
+        if self.app and self.app.theme_cls:
+            if self.app.theme_cls.theme_style == "Dark":
+                icon_color = [1, 1, 1, 1]  # White for dark theme
+            else:
+                icon_color = [0, 0, 0, 1]  # Black for light theme
+        else:
+            icon_color = [0, 0, 0, 1]  # Default to black
+        
         menu_items = [
             {
                 "viewclass": "CustomOneLineIconListItem",
                 "text": "Edit Selected",
                 "icon": "pencil",
+                "icon_color": icon_color,
                 "on_release": lambda: self.app.menu_callback("edit"),
             },
             {
                 "viewclass": "CustomOneLineIconListItem",
                 "text": "Remove Selected",
                 "icon": "delete",
+                "icon_color": icon_color,
                 "on_release": lambda: self.app.menu_callback("remove"),
             },
             {
                 "viewclass": "CustomOneLineIconListItem",
                 "text": "Backup Data",
                 "icon": "content-save",
+                "icon_color": icon_color,
                 "on_release": lambda: self.app.menu_callback("backup"),
             },
             {
                 "viewclass": "CustomOneLineIconListItem",
                 "text": "Restore Data",
                 "icon": "folder",
+                "icon_color": icon_color,
                 "on_release": lambda: self.app.menu_callback("restore"),
             },
             {
                 "viewclass": "CustomOneLineIconListItem",
                 "text": "Settings",
                 "icon": "cog",
+                "icon_color": icon_color,
                 "on_release": lambda: self.app.menu_callback("settings"),
             },
             {
                 "viewclass": "CustomOneLineIconListItem",
                 "text": "Icon Preview",
                 "icon": "eye",
+                "icon_color": icon_color,
                 "on_release": lambda: self.app.menu_callback("icon_preview"),
             },
         ]

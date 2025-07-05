@@ -4,8 +4,13 @@ from pathlib import Path
 from kivy.clock import Clock
 from kivy.uix.screenmanager import ScreenManager
 from kivymd.app import MDApp
-from kivymd.uix.snackbar import MDSnackbar
 from kivymd.uix.filemanager import MDFileManager
+from kivymd.uix.snackbar.snackbar import MDSnackbar
+from kivy.utils import platform
+try:
+    from plyer import notification
+except ImportError:
+    notification = None
 from app.core.config import AppConfig
 from app.services.storage_service import StorageService
 from app.services.auth_service import AuthService
@@ -22,8 +27,9 @@ from app.ui.components.dialogs import (
 )
 from app.ui.themes.theme_manager import ThemeManager
 from app.utils.platform_utils import get_user_data_dir
-from kivymd.uix.label import MDIcon
+from kivymd.uix.label import MDIcon, MDLabel
 from app.ui.components.custom_widgets import CustomOneLineIconListItem
+from kivy.metrics import dp
 
 class ModernAuthenticatorApp(MDApp):
     def __init__(self, **kwargs):
@@ -237,7 +243,36 @@ class ModernAuthenticatorApp(MDApp):
             card.update_theme_colors()
             card.progress_bar.color = self.theme_cls.primary_color
 
-    def show_snackbar(self, text):
-        snackbar = MDSnackbar()
-        snackbar.text = text
+    def show_snackbar(self, text, duration=2):
+        if not text or not text.strip():
+            return
+
+        if platform == 'android' and notification:
+            try:
+                notification.notify(
+                    title=self.app_config.APP_NAME,
+                    message=text,
+                    app_name=self.app_config.APP_NAME,
+                    timeout=duration
+                )
+                return
+            except Exception as e:
+                print(f"Error showing native notification: {e}")
+
+        # Create label for the text
+        label = MDLabel(
+            text=text,
+            theme_text_color="Custom",
+            text_color="white",
+        )
+        label.bind(size=lambda instance, value: setattr(instance, "text_size", value))
+        
+        snackbar = MDSnackbar(
+            label,
+            y=dp(24),
+            pos_hint={"center_x": 0.5},
+            size_hint_x=0.5,
+            md_bg_color="#323232",
+            duration=duration,
+        )
         snackbar.open()

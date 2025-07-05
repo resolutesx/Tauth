@@ -4,7 +4,7 @@ from kivymd.uix.screen import MDScreen
 from kivymd.uix.toolbar import MDTopAppBar
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.scrollview import MDScrollView
-from kivymd.uix.list import IRightBodyTouch, MDList, OneLineAvatarIconListItem, TwoLineAvatarIconListItem, IconLeftWidget, IconRightWidget, IRightBody, IconRightWidgetWithoutTouch
+from kivymd.uix.list import IRightBodyTouch , MDList, OneLineAvatarIconListItem, TwoLineAvatarIconListItem, IconLeftWidget, IconRightWidget, IRightBody, IconRightWidgetWithoutTouch
 from kivymd.uix.label import MDLabel
 from kivymd.uix.card import MDCard
 from kivymd.uix.dialog import MDDialog
@@ -13,17 +13,18 @@ from kivymd.uix.gridlayout import MDGridLayout
 from kivymd.uix.behaviors import RoundedRectangularElevationBehavior
 from kivy.lang import Builder
 from kivy.factory import Factory
-from kivymd.uix.selectioncontrol import MDSwitch
+from kivymd.uix.snackbar.snackbar import MDSnackbar, MDSnackbarActionButton, MDSnackbarCloseButton
 from kivy.clock import Clock
+from kivymd.uix.selectioncontrol.selectioncontrol import MDSwitch
 
-class ColorCard(MDCard, RoundedRectangularElevationBehavior):
+class ColorCard(MDCard):
     def __init__(self, color_name, color_code, kivymd_name, on_select=None, **kwargs):
         super().__init__(**kwargs)
         self.md_bg_color = color_code
         self.size_hint = (None, None)
         self.size = (dp(60), dp(60))
         self.radius = [dp(30)]
-        self.elevation = 2
+        self.elevation = 0  # No shadow
         self.color_name = color_name
         self.kivymd_name = kivymd_name  # The actual KivyMD palette name
         self.on_select = on_select
@@ -44,6 +45,7 @@ class SettingsScreen(MDScreen):
         self.app = app
         self.theme_dialog = None
         self.is_ui_setup = False
+        self.is_initializing = False
         
     def setup_ui(self):
         if self.is_ui_setup:
@@ -56,7 +58,10 @@ class SettingsScreen(MDScreen):
             title="Settings",
             elevation=1,
             left_action_items=[["arrow-left", lambda x: self.go_back()]],
+            anchor_title="left",
         )
+        
+        # Add custom title label positioned as far left as possible
         layout.add_widget(toolbar)
         
         # Scrollable Content
@@ -95,8 +100,9 @@ class SettingsScreen(MDScreen):
             adaptive_height=True,
             padding=dp(16),
             spacing=dp(8),
-            elevation=1,
-            radius=[dp(12)]
+            elevation=0,
+            radius=[dp(12)],
+            md_bg_color=[0, 0, 0, 0]  # Transparent background
         )
         
         # Section Header
@@ -126,8 +132,9 @@ class SettingsScreen(MDScreen):
             adaptive_height=True,
             padding=dp(16),
             spacing=dp(8),
-            elevation=1,
-            radius=[dp(12)]
+            elevation=0,
+            radius=[dp(12)],
+            md_bg_color=[0, 0, 0, 0]  # Transparent background
         )
         
         # Section Header
@@ -177,8 +184,9 @@ class SettingsScreen(MDScreen):
             adaptive_height=True,
             padding=dp(16),
             spacing=dp(8),
-            elevation=1,
-            radius=[dp(12)]
+            elevation=0,
+            radius=[dp(12)],
+            md_bg_color=[0, 0, 0, 0]  # Transparent background
         )
         
         # Section Header
@@ -231,8 +239,9 @@ class SettingsScreen(MDScreen):
             adaptive_height=True,
             padding=dp(16),
             spacing=dp(8),
-            elevation=1,
-            radius=[dp(12)]
+            elevation=0,
+            radius=[dp(12)],
+            md_bg_color=[0, 0, 0, 0]  # Transparent background
         )
         
         # Section Header
@@ -274,10 +283,9 @@ class SettingsScreen(MDScreen):
         return card
     
     def show_theme_dialog(self, *args):
-        """Show theme color selection dialog"""
+        """Show theme color selection dialog (mobile‐friendly, no shadows, selectable without close)"""
         if not self.theme_dialog:
-            # Color palette with KivyMD-compatible names
-            # Format: (Display Name, Color Code, KivyMD Palette Name)
+            # Color palette
             colors = [
                 ("Red", "#F44336", "Red"),
                 ("Pink", "#E91E63", "Pink"), 
@@ -298,39 +306,50 @@ class SettingsScreen(MDScreen):
                 ("Brown", "#795548", "Brown"),
                 ("Blue Gray", "#607D8B", "BlueGray")
             ]
-            
-            # Create color grid
+
+            # Grid of swatches
             color_grid = MDGridLayout(
-                cols=6,
+                cols=4,
                 adaptive_height=True,
+                padding=dp(8),
                 spacing=dp(8),
-                size_hint_y=None,
-                height=dp(200)
             )
-            
             for display_name, color_code, kivymd_name in colors:
                 color_card = ColorCard(
                     color_name=display_name,
                     color_code=color_code,
                     kivymd_name=kivymd_name,
-                    on_select=self.change_theme
+                    # fill cell horizontally, fixed height
+                    size_hint=(1, None),
+                    height=dp(56),
+                    elevation=0,        # no shadow
+                    radius=[0],         # optional: square corners
+                    on_select=self.change_theme  # only changes theme
                 )
                 color_grid.add_widget(color_card)
-            
+
+            # Scrollable container
+            scroll = MDScrollView(
+                size_hint=(1, None),
+                height=dp(240),
+            )
+            scroll.add_widget(color_grid)
+
+            # Build dialog
             self.theme_dialog = MDDialog(
                 title="Choose Theme Color",
                 type="custom",
-                content_cls=color_grid,
+                content_cls=scroll,
                 buttons=[
                     MDFlatButton(
-                        text="Cancel",
+                        text="CANCEL",
                         on_release=self.close_theme_dialog
                     )
-                ]
+                ],
             )
-        
+
         self.theme_dialog.open()
-    
+        
     def close_theme_dialog(self, *args):
         """Close theme selection dialog"""
         if self.theme_dialog:
@@ -340,7 +359,8 @@ class SettingsScreen(MDScreen):
         """Change app theme color"""
         if self.app:
             self.app.change_theme(kivymd_name)  # Use the KivyMD-compatible name
-        self.close_theme_dialog()
+            # Update switch colors to match new theme
+            self.update_switch_colors()
         
         # Show confirmation with display name
         self.show_snackbar(f"Theme changed to {display_name}")
@@ -350,15 +370,18 @@ class SettingsScreen(MDScreen):
         if self.app:
             # Implement dark mode toggle in your app
             self.app.toggle_dark_mode(active)
-        self.show_snackbar("Dark mode " + ("enabled" if active else "disabled"))
+        if not self.is_initializing:
+            self.show_snackbar("Dark mode " + ("enabled" if active else "disabled"))
     
     def toggle_notifications(self, switch, active):
         """Toggle notifications"""
-        self.show_snackbar("Notifications " + ("enabled" if active else "disabled"))
+        if not self.is_initializing:
+            self.show_snackbar("Notifications " + ("enabled" if active else "disabled"))
     
     def toggle_auto_sync(self, switch, active):
         """Toggle auto-sync"""
-        self.show_snackbar("Auto-sync " + ("enabled" if active else "disabled"))
+        if not self.is_initializing:
+            self.show_snackbar("Auto-sync " + ("enabled" if active else "disabled"))
     
     def show_about(self, *args):
         """Show about dialog"""
@@ -386,10 +409,51 @@ class SettingsScreen(MDScreen):
         """Rate app functionality"""
         self.show_snackbar("Opening app store for rating...")
     
-    def show_snackbar(self, message):
-        """Show snackbar message"""
-        if self.app and hasattr(self.app, 'show_snackbar'):
-            self.app.show_snackbar(message)
+    def show_snackbar(self, message, action_text=None, action_callback=None):
+        """Show snackbar message with optional action button and theme-aware background."""
+        # Determine background color based on theme
+        if self.app and hasattr(self.app, "theme_cls"):
+            if self.app.theme_cls.theme_style == "Dark":
+                bg_color = "#2A2A2A"  # Lighter dark
+            else:
+                bg_color = "#F5F5F5"  # Darker white
+        else:
+            bg_color = "#F5F5F5"
+
+        # Prepare snackbar content
+        # Determine text color based on theme
+        if self.app and hasattr(self.app, "theme_cls"):
+            if self.app.theme_cls.theme_style == "Dark":
+                text_color = "#FFFFFF"  # White text for dark background
+            else:
+                text_color = "#000000"  # Black text for light background
+        else:
+            text_color = "#000000"  # Default to black
+            
+        label = MDLabel(
+            text=message,
+            theme_text_color="Custom",
+            text_color=text_color,
+        )
+        label.bind(size=lambda instance, value: setattr(instance, "text_size", value))
+        content = [label]
+        if action_text:
+            content.append(
+                MDSnackbarActionButton(
+                    text=action_text,
+                    theme_text_color="Custom",
+                    text_color="#8E353C",
+                    on_release=action_callback if action_callback else lambda x: None,
+                )
+            )
+
+        MDSnackbar(
+            *content,
+            y=dp(24),
+            pos_hint={"center_x": 0.5},
+            size_hint_x=0.5,
+            md_bg_color=bg_color,
+        ).open()
     
     def on_pre_enter(self, *args):
         """Event fired when the screen is about to be displayed."""
@@ -398,12 +462,31 @@ class SettingsScreen(MDScreen):
 
     def update_switch_states(self, *args):
         """Update the state of the switches after the screen transition."""
+        # Set flag to prevent snackbar triggers during initialization
+        self.is_initializing = True
+        
+        # Update switch states
         if self.app and self.app.theme_cls:
             self.dark_mode_switch.active = self.app.theme_cls.theme_style == "Dark"
         
         # Set other switches' initial states here if needed
         self.notif_switch.active = True
         self.sync_switch.active = True
+        
+        # Reset flag after initialization
+        self.is_initializing = False
+    
+    def update_switch_colors(self):
+        """Update switch colors to match current theme"""
+        if self.app and self.app.theme_cls:
+            primary_color = self.app.theme_cls.primary_color
+            # Update all switches' active track colors
+            if hasattr(self, 'dark_mode_switch'):
+                self.dark_mode_switch.track_color_active = primary_color
+            if hasattr(self, 'notif_switch'):
+                self.notif_switch.track_color_active = primary_color
+            if hasattr(self, 'sync_switch'):
+                self.sync_switch.track_color_active = primary_color
 
     def go_back(self):
         """Navigate back to main screen"""

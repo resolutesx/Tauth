@@ -2,13 +2,16 @@ import os
 from kivy.utils import platform
 
 def get_user_data_dir():
+    """Return a directory path for storing user data, platform-appropriately."""
     if platform == "android":
-        from jnius import autoclass
-        PythonActivity = autoclass('org.kivy.android.PythonActivity')
-        return PythonActivity.getAppContext().getFilesDir().getAbsolutePath()
+        try:
+            from android.storage import app_storage_path
+            return app_storage_path()
+        except ImportError:
+            # In case 'android' module isn't available
+            return os.path.join(os.path.expanduser("~"), ".local", "share", "Tautth")
     elif platform == "ios":
-        from os.path import expanduser
-        return expanduser('~/Documents')
+        return os.path.expanduser("~/Documents")
     else:
         home = os.path.expanduser("~")
         if platform == "win":
