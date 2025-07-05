@@ -4,7 +4,7 @@ from kivymd.uix.screen import MDScreen
 from kivymd.uix.toolbar import MDTopAppBar
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.scrollview import MDScrollView
-from kivymd.uix.list import MDList, OneLineAvatarIconListItem, TwoLineAvatarIconListItem, IconLeftWidget, IconRightWidget
+from kivymd.uix.list import IRightBodyTouch, MDList, OneLineAvatarIconListItem, TwoLineAvatarIconListItem, IconLeftWidget, IconRightWidget, IRightBody, IconRightWidgetWithoutTouch
 from kivymd.uix.label import MDLabel
 from kivymd.uix.card import MDCard
 from kivymd.uix.dialog import MDDialog
@@ -33,15 +33,22 @@ class ColorCard(MDCard, RoundedRectangularElevationBehavior):
         if self.on_select:
             self.on_select(self.kivymd_name, self.color_name)
 
+class RightSwitchContainer(IRightBodyTouch, MDSwitch):
+    pass
+
+
 class SettingsScreen(MDScreen):
     def __init__(self, app=None, **kwargs):
         super().__init__(**kwargs)
         self.name = "settings"
         self.app = app
         self.theme_dialog = None
-        self.setup_ui()
+        self.is_ui_setup = False
         
     def setup_ui(self):
+        if self.is_ui_setup:
+            return
+            
         layout = MDBoxLayout(orientation="vertical")
         
         # Modern Toolbar
@@ -79,6 +86,7 @@ class SettingsScreen(MDScreen):
         scroll.add_widget(content)
         layout.add_widget(scroll)
         self.add_widget(layout)
+        self.is_ui_setup = True
     
     def create_app_info_section(self):
         """Create app information section"""
@@ -145,22 +153,19 @@ class SettingsScreen(MDScreen):
         dark_mode_item = TwoLineAvatarIconListItem(
             text="Dark Mode",
             secondary_text="Switch between light and dark themes",
-            theme_text_color="Primary",
-            secondary_theme_text_color="Secondary"
         )
         dark_mode_item.add_widget(IconLeftWidget(icon="weather-night"))
-        
-        right_widget = IconRightWidget()
-        self.dark_mode_switch = MDSwitch(
+
+        self.dark_mode_switch = RightSwitchContainer(
             thumb_color_active="white",
             thumb_color_inactive="white",
             track_color_active=self.app.theme_cls.primary_color,
-            track_color_inactive=[0.7, 0.7, 0.7, 1]
+            track_color_inactive=[0.7, 0.7, 0.7, 1],
+            size_hint=(None, None),
+            size=(dp(48), dp(32)),
         )
         self.dark_mode_switch.bind(active=self.toggle_dark_mode)
-        right_widget.add_widget(self.dark_mode_switch)
-        dark_mode_item.add_widget(right_widget)
-        
+        dark_mode_item.add_widget(self.dark_mode_switch)
         card.add_widget(dark_mode_item)
         
         return card
@@ -191,17 +196,14 @@ class SettingsScreen(MDScreen):
             secondary_text="Receive app notifications (NOT WORKING)"
         )
         notif_item.add_widget(IconLeftWidget(icon="bell"))
-        
-        right_notif_widget = IconRightWidget()
-        self.notif_switch = MDSwitch(
+        self.notif_switch = RightSwitchContainer(
             thumb_color_active="white",
             thumb_color_inactive="white",
             track_color_active=self.app.theme_cls.primary_color,
             track_color_inactive=[0.7, 0.7, 0.7, 1]
         )
         self.notif_switch.bind(active=self.toggle_notifications)
-        right_notif_widget.add_widget(self.notif_switch)
-        notif_item.add_widget(right_notif_widget)
+        notif_item.add_widget(self.notif_switch)
         card.add_widget(notif_item)
         
         # Auto-sync
@@ -210,17 +212,14 @@ class SettingsScreen(MDScreen):
             secondary_text="Automatically sync data (NOT WORKING)"
         )
         sync_item.add_widget(IconLeftWidget(icon="sync"))
-        
-        right_sync_widget = IconRightWidget()
-        self.sync_switch = MDSwitch(
+        self.sync_switch = RightSwitchContainer(
             thumb_color_active="white",
             thumb_color_inactive="white",
             track_color_active=self.app.theme_cls.primary_color,
             track_color_inactive=[0.7, 0.7, 0.7, 1]
         )
         self.sync_switch.bind(active=self.toggle_auto_sync)
-        right_sync_widget.add_widget(self.sync_switch)
-        sync_item.add_widget(right_sync_widget)
+        sync_item.add_widget(self.sync_switch)
         card.add_widget(sync_item)
         
         return card
@@ -394,7 +393,15 @@ class SettingsScreen(MDScreen):
     
     def on_pre_enter(self, *args):
         """Event fired when the screen is about to be displayed."""
-        self.dark_mode_switch.active = self.app.theme_cls.theme_style == "Dark"
+        self.setup_ui()
+        Clock.schedule_once(self.update_switch_states, 0)
+
+    def update_switch_states(self, *args):
+        """Update the state of the switches after the screen transition."""
+        if self.app and self.app.theme_cls:
+            self.dark_mode_switch.active = self.app.theme_cls.theme_style == "Dark"
+        
+        # Set other switches' initial states here if needed
         self.notif_switch.active = True
         self.sync_switch.active = True
 

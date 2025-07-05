@@ -17,12 +17,13 @@ class AccountCard(MDCard, ThemableBehavior):
         self.raw_code = code
         self.on_select = on_select
         self.orientation = "vertical"
-        self.elevation = 1
+        self.elevation = 0
         self.padding = (dp(24), dp(20), dp(24), dp(20))
         self.size_hint_y = None
         self.height = dp(120)
         self.radius = [dp(16)]
         self.ripple_behavior = True
+        self.line_width = dp(2)
         self.selected = False
         self.long_press_time = 1.5
         self._long_press_event = None
@@ -66,10 +67,7 @@ class AccountCard(MDCard, ThemableBehavior):
             width=dp(180),
             halign="right",
         )
-        
-        top_layout.add_widget(info_layout)
-        top_layout.add_widget(Widget())
-        top_layout.add_widget(self.code_label)
+    
         
         bottom_layout = MDBoxLayout(
             orientation="horizontal",
@@ -106,12 +104,13 @@ class AccountCard(MDCard, ThemableBehavior):
         self.raw_code = code
         self.on_select = on_select
         self.orientation = "vertical"
-        self.elevation = 1
+        self.elevation = 0
         self.padding = (dp(24), dp(20), dp(24), dp(20))
         self.size_hint_y = None
         self.height = dp(120)
         self.radius = [dp(16)]
         self.ripple_behavior = True
+        self.line_width = dp(2)
         self.selected = False
         self.long_press_time = 1.5
         self._long_press_event = None
@@ -201,17 +200,12 @@ class AccountCard(MDCard, ThemableBehavior):
             touch.grab(self)
             self._touch_in_progress = True
             self._was_long_press = False
-            anim = Animation(elevation=4, md_bg_color=self.theme_cls.bg_light, duration=0.1)
-            anim.start(self)
             self._long_press_event = Clock.schedule_once(lambda dt: self._on_long_press(touch), self.long_press_time)
             return True
         return super().on_touch_down(touch)
 
     def _on_touch_up(self, instance, touch):
         if self.collide_point(*touch.pos):
-            if not self.selected:
-                anim = Animation(elevation=1, md_bg_color=self.theme_cls.bg_normal, duration=0.2)
-                anim.start(self)
             if touch.grab_current is self:
                 touch.ungrab(self)
             if self._long_press_event:
@@ -253,14 +247,15 @@ class AccountCard(MDCard, ThemableBehavior):
 
     def update_selected_visual(self):
         if self.selected:
-            primary_color = self.theme_cls.primary_color
-            self.md_bg_color = (*primary_color[:3], 0.2)
-            self.elevation = 6
-            self.line_color = (*self.theme_cls.primary_color[:3], 0.8)
+            self.md_bg_color = self.get_card_bg_color()
+            self.elevation = 0
+            anim = Animation(line_color=self.theme_cls.primary_color, duration=0.2)
+            anim.start(self)
         else:
-            self.md_bg_color = self.theme_cls.bg_normal
-            self.elevation = 1
-            self.line_color = (*self.theme_cls.divider_color[:3], 0.3)
+            self.md_bg_color = self.get_card_bg_color()
+            self.elevation = 0
+            anim = Animation(line_color=self.theme_cls.divider_color, duration=0.2)
+            anim.start(self)
 
     def update_code(self, code, ttl):
         self.raw_code = code
@@ -277,9 +272,26 @@ class AccountCard(MDCard, ThemableBehavior):
         else:
             self.progress_bar.color = self.theme_cls.error_color
 
+    def get_card_bg_color(self):
+        bg = self.theme_cls.bg_normal
+        style = getattr(self.theme_cls, 'theme_style', 'Light')
+        # bg is (r, g, b, a) or (r, g, b)
+        r, g, b = bg[:3]
+        a = bg[3] if len(bg) > 3 else 1
+        if style == 'Light':
+            # Slightly darker (90%)
+            factor = 0.9
+        else:
+            # Slightly lighter (110%, capped at 1.0)
+            factor = 1.30
+        r = min(max(r * factor, 0), 1)
+        g = min(max(g * factor, 0), 1)
+        b = min(max(b * factor, 0), 1)
+        return (r, g, b, a)
+
     def update_theme_colors(self, *args):
-        self.md_bg_color = self.theme_cls.bg_normal
-        self.line_color = (*self.theme_cls.divider_color[:3], 0.3)
+        self.md_bg_color = self.get_card_bg_color()
+        self.line_color = self.theme_cls.divider_color
         if hasattr(self, 'issuer_label'):
             self.issuer_label.theme_text_color = "Secondary"
         self.name_label.theme_text_color = "Primary"

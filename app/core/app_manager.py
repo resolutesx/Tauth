@@ -4,7 +4,7 @@ from pathlib import Path
 from kivy.clock import Clock
 from kivy.uix.screenmanager import ScreenManager
 from kivymd.app import MDApp
-from kivymd.toast import toast
+from kivymd.uix.snackbar import MDSnackbar
 from kivymd.uix.filemanager import MDFileManager
 from app.core.config import AppConfig
 from app.services.storage_service import StorageService
@@ -23,6 +23,7 @@ from app.ui.components.dialogs import (
 from app.ui.themes.theme_manager import ThemeManager
 from app.utils.platform_utils import get_user_data_dir
 from kivymd.uix.label import MDIcon
+from app.ui.components.custom_widgets import CustomOneLineIconListItem
 
 class ModernAuthenticatorApp(MDApp):
     def __init__(self, **kwargs):
@@ -227,7 +228,6 @@ class ModernAuthenticatorApp(MDApp):
         self.theme_manager.save_theme_prefs()
         for card in self.account_cards.values():
             card.update_theme_colors()
-        self.update_icon_colors(self.root)
 
     def change_theme(self, color_name):
         self.theme_cls.primary_palette = color_name
@@ -236,13 +236,8 @@ class ModernAuthenticatorApp(MDApp):
         for card in self.account_cards.values():
             card.update_theme_colors()
             card.progress_bar.color = self.theme_cls.primary_color
-        self.update_icon_colors(self.root)
 
     def show_snackbar(self, text):
-        toast(text)
-
-    def update_icon_colors(self, widget):
-        if isinstance(widget, MDIcon):
-            widget.theme_text_color = "Primary"
-        for child in widget.children:
-            self.update_icon_colors(child)
+        snackbar = MDSnackbar()
+        snackbar.text = text
+        snackbar.open()
