@@ -66,13 +66,13 @@ class MainScreen(MDScreen):
         # Initialize empty message layout and its labels
         self.empty_message_layout = MDBoxLayout(
             orientation="vertical",
-            adaptive_height=True,
-            spacing=dp(20),
-            padding=[dp(40), dp(80)],
+            size_hint=(None, None),
+            size=(dp(280), dp(120)),
             pos_hint={'center_x': 0.5, 'center_y': 0.5},
-            size_hint=(1, None), # Will be sized dynamically
-            md_bg_color=self.app.theme_cls.bg_normal
+            spacing=dp(5),
+            md_bg_color=[0, 0, 0, 0]
         )
+
         self.empty_message_label_1 = MDLabel(
             text="No accounts yet",
             theme_text_color="Primary",
@@ -87,22 +87,26 @@ class MainScreen(MDScreen):
             halign="center",
             font_size=dp(16)
         )
+            
         self.empty_message_layout.add_widget(self.empty_message_label_1)
         self.empty_message_layout.add_widget(self.empty_message_label_2)
-        self.layout.add_widget(self.empty_message_layout) # Add to main layout
+        self.overlay.add_widget(self.empty_message_layout)
         self.empty_message_layout.opacity = 0 # Start hidden
         self.empty_message_layout.height = 0 # Start with no height
         self.empty_message_layout.disabled = True # Disable interaction
 
     def show_menu(self, instance):
-        # Determine icon color based on theme
+        # Determine icon color and background color based on theme
         if self.app and self.app.theme_cls:
             if self.app.theme_cls.theme_style == "Dark":
                 icon_color = [1, 1, 1, 1]  # White for dark theme
+                bg_color = [0.2, 0.2, 0.2, 1]  # Dark gray for dark theme
             else:
                 icon_color = [0, 0, 0, 1]  # Black for light theme
+                bg_color = [0.90, 0.90, 0.90, 1]  # Light gray for light theme (darker than pure white)
         else:
             icon_color = [0, 0, 0, 1]  # Default to black
+            bg_color = [0.90, 0.90, 0.90, 1]  # Default to light gray
         
         menu_items = [
             {
@@ -152,7 +156,8 @@ class MainScreen(MDScreen):
         self.menu = MDDropdownMenu(
             caller=instance,
             items=menu_items,
-            elevation=0
+            elevation=0,
+            md_bg_color=bg_color
         )
         self.menu.open()
 

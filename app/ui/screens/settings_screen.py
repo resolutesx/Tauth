@@ -9,13 +9,13 @@ from kivymd.uix.label import MDLabel
 from kivymd.uix.card import MDCard
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.button import MDFlatButton, MDRaisedButton, MDIconButton
+from kivymd.uix.snackbar import MDSnackbar, MDSnackbarActionButton
 from kivymd.uix.gridlayout import MDGridLayout
 from kivymd.uix.behaviors import RoundedRectangularElevationBehavior
 from kivy.lang import Builder
 from kivy.factory import Factory
-from kivymd.uix.snackbar.snackbar import MDSnackbar, MDSnackbarActionButton, MDSnackbarCloseButton
+from kivymd.uix.selectioncontrol import MDCheckbox
 from kivy.clock import Clock
-from kivymd.uix.selectioncontrol.selectioncontrol import MDSwitch
 
 class ColorCard(MDCard):
     def __init__(self, color_name, color_code, kivymd_name, on_select=None, **kwargs):
@@ -34,7 +34,7 @@ class ColorCard(MDCard):
         if self.on_select:
             self.on_select(self.kivymd_name, self.color_name)
 
-class RightSwitchContainer(IRightBodyTouch, MDSwitch):
+class RightCheckbox(IRightBodyTouch, MDCheckbox):
     pass
 
 
@@ -163,16 +163,9 @@ class SettingsScreen(MDScreen):
         )
         dark_mode_item.add_widget(IconLeftWidget(icon="weather-night"))
 
-        self.dark_mode_switch = RightSwitchContainer(
-            thumb_color_active="white",
-            thumb_color_inactive="white",
-            track_color_active=self.app.theme_cls.primary_color,
-            track_color_inactive=[0.7, 0.7, 0.7, 1],
-            size_hint=(None, None),
-            size=(dp(48), dp(32)),
-        )
-        self.dark_mode_switch.bind(active=self.toggle_dark_mode)
-        dark_mode_item.add_widget(self.dark_mode_switch)
+        self.dark_mode_checkbox = RightCheckbox()
+        self.dark_mode_checkbox.bind(active=self.toggle_dark_mode)
+        dark_mode_item.add_widget(self.dark_mode_checkbox)
         card.add_widget(dark_mode_item)
         
         return card
@@ -204,14 +197,9 @@ class SettingsScreen(MDScreen):
             secondary_text="Receive app notifications (NOT WORKING)"
         )
         notif_item.add_widget(IconLeftWidget(icon="bell"))
-        self.notif_switch = RightSwitchContainer(
-            thumb_color_active="white",
-            thumb_color_inactive="white",
-            track_color_active=self.app.theme_cls.primary_color,
-            track_color_inactive=[0.7, 0.7, 0.7, 1]
-        )
-        self.notif_switch.bind(active=self.toggle_notifications)
-        notif_item.add_widget(self.notif_switch)
+        self.notif_checkbox = RightCheckbox()
+        self.notif_checkbox.bind(active=self.toggle_notifications)
+        notif_item.add_widget(self.notif_checkbox)
         card.add_widget(notif_item)
         
         # Auto-sync
@@ -220,14 +208,9 @@ class SettingsScreen(MDScreen):
             secondary_text="Automatically sync data (NOT WORKING)"
         )
         sync_item.add_widget(IconLeftWidget(icon="sync"))
-        self.sync_switch = RightSwitchContainer(
-            thumb_color_active="white",
-            thumb_color_inactive="white",
-            track_color_active=self.app.theme_cls.primary_color,
-            track_color_inactive=[0.7, 0.7, 0.7, 1]
-        )
-        self.sync_switch.bind(active=self.toggle_auto_sync)
-        sync_item.add_widget(self.sync_switch)
+        self.sync_checkbox = RightCheckbox()
+        self.sync_checkbox.bind(active=self.toggle_auto_sync)
+        sync_item.add_widget(self.sync_checkbox)
         card.add_widget(sync_item)
         
         return card
@@ -359,13 +342,11 @@ class SettingsScreen(MDScreen):
         """Change app theme color"""
         if self.app:
             self.app.change_theme(kivymd_name)  # Use the KivyMD-compatible name
-            # Update switch colors to match new theme
-            self.update_switch_colors()
         
         # Show confirmation with display name
         self.show_snackbar(f"Theme changed to {display_name}")
     
-    def toggle_dark_mode(self, switch, active):
+    def toggle_dark_mode(self, checkbox, active):
         """Toggle dark mode"""
         if self.app:
             # Implement dark mode toggle in your app
@@ -373,12 +354,12 @@ class SettingsScreen(MDScreen):
         if not self.is_initializing:
             self.show_snackbar("Dark mode " + ("enabled" if active else "disabled"))
     
-    def toggle_notifications(self, switch, active):
+    def toggle_notifications(self, checkbox, active):
         """Toggle notifications"""
         if not self.is_initializing:
             self.show_snackbar("Notifications " + ("enabled" if active else "disabled"))
     
-    def toggle_auto_sync(self, switch, active):
+    def toggle_auto_sync(self, checkbox, active):
         """Toggle auto-sync"""
         if not self.is_initializing:
             self.show_snackbar("Auto-sync " + ("enabled" if active else "disabled"))
@@ -458,35 +439,23 @@ class SettingsScreen(MDScreen):
     def on_pre_enter(self, *args):
         """Event fired when the screen is about to be displayed."""
         self.setup_ui()
-        Clock.schedule_once(self.update_switch_states, 0)
+        Clock.schedule_once(self.update_checkbox_states, 0)
 
-    def update_switch_states(self, *args):
-        """Update the state of the switches after the screen transition."""
+    def update_checkbox_states(self, *args):
+        """Update the state of the checkboxes after the screen transition."""
         # Set flag to prevent snackbar triggers during initialization
         self.is_initializing = True
         
-        # Update switch states
+        # Update checkbox states
         if self.app and self.app.theme_cls:
-            self.dark_mode_switch.active = self.app.theme_cls.theme_style == "Dark"
+            self.dark_mode_checkbox.active = self.app.theme_cls.theme_style == "Dark"
         
-        # Set other switches' initial states here if needed
-        self.notif_switch.active = True
-        self.sync_switch.active = True
+        # Set other checkboxes' initial states here if needed
+        self.notif_checkbox.active = True
+        self.sync_checkbox.active = True
         
         # Reset flag after initialization
         self.is_initializing = False
-    
-    def update_switch_colors(self):
-        """Update switch colors to match current theme"""
-        if self.app and self.app.theme_cls:
-            primary_color = self.app.theme_cls.primary_color
-            # Update all switches' active track colors
-            if hasattr(self, 'dark_mode_switch'):
-                self.dark_mode_switch.track_color_active = primary_color
-            if hasattr(self, 'notif_switch'):
-                self.notif_switch.track_color_active = primary_color
-            if hasattr(self, 'sync_switch'):
-                self.sync_switch.track_color_active = primary_color
 
     def go_back(self):
         """Navigate back to main screen"""
