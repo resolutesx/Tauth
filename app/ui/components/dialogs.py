@@ -1,10 +1,12 @@
-from kivy.metrics import dp
-from kivymd.uix.dialog import MDDialog
-from kivymd.uix.button import MDRaisedButton, MDFlatButton
-from kivymd.uix.textfield import MDTextField
-from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.label import MDLabel
 from pathlib import Path
+
+from kivy.metrics import dp
+from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.button import MDFlatButton, MDRaisedButton
+from kivymd.uix.dialog import MDDialog
+from kivymd.uix.label import MDLabel
+from kivymd.uix.textfield import MDTextField
+
 from app.utils.validation import validate_account_name, validate_totp_secret
 
 class BaseDialog:

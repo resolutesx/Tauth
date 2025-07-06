@@ -1,7 +1,10 @@
-import pyotp
 import json
-from pathlib import Path
-from app.utils.crypto_utils import encrypt_data, decrypt_data
+import threading
+
+import pyotp
+from kivy.clock import Clock
+
+from app.utils.crypto_utils import decrypt_data, encrypt_data
 
 class AuthService:
     def __init__(self, storage_service):
@@ -45,16 +48,40 @@ class AuthService:
     def get_all_keys(self):
         return self.keys
 
-    def backup(self, path, password):
-        data = json.dumps(self.keys).encode('utf-8')
-        encrypted_data = encrypt_data(data, password)
-        with open(path, 'wb') as f:
-            f.write(encrypted_data)
+    def backup(self, path, password, on_success=None, on_error=None):
+        threading.Thread(
+            target=self._threaded_backup,
+            args=(path, password, on_success, on_error)
+        ).start()
 
-    def restore(self, path, password):
-        with open(path, 'rb') as f:
-            encrypted_data = f.read()
-        decrypted_data = decrypt_data(encrypted_data, password)
-        self.keys = json.loads(decrypted_data.decode('utf-8'))
-        self.storage.save_keys(self.keys)
-        self.totp_cache.clear()
+    def _threaded_backup(self, path, password, on_success, on_error):
+        try:
+            data = json.dumps(self.keys).encode('utf-8')
+            encrypted_data = encrypt_data(data, password)
+            with open(path, 'wb') as f:
+                f.write(encrypted_data)
+            if on_success:
+                Clock.schedule_once(lambda dt: on_success())
+        except Exception as e:
+            if on_error:
+                Clock.schedule_once(lambda dt: on_error(e))
+
+    def restore(self, path, password, on_success=None, on_error=None):
+        threading.Thread(
+            target=self._threaded_restore,
+            args=(path, password, on_success, on_error)
+        ).start()
+
+    def _threaded_restore(self, path, password, on_success, on_error):
+        try:
+            with open(path, 'rb') as f:
+                encrypted_data = f.read()
+            decrypted_data = decrypt_data(encrypted_data, password)
+            self.keys = json.loads(decrypted_data.decode('utf-8'))
+            self.storage.save_keys(self.keys)
+            self.totp_cache.clear()
+            if on_success:
+                Clock.schedule_once(lambda dt: on_success())
+        except Exception as e:
+            if on_error:
+                Clock.schedule_once(lambda dt: on_error(e))

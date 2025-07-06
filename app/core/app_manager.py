@@ -1,35 +1,36 @@
 import time
-import pyotp
 from pathlib import Path
+
 from kivy.clock import Clock
+from kivy.metrics import dp
 from kivy.uix.screenmanager import ScreenManager
+from kivy.utils import platform
 from kivymd.app import MDApp
 from kivymd.uix.filemanager import MDFileManager
-from kivymd.uix.snackbar.snackbar import MDSnackbar
-from kivy.utils import platform
+from kivymd.uix.label import MDLabel
+from kivymd.uix.snackbar import MDSnackbar
+
+from app.core.config import AppConfig
+from app.services.auth_service import AuthService
+from app.services.storage_service import StorageService
+from app.ui.components.dialogs import (
+    AddAccountDialog,
+    BackupDialog,
+    ConfirmDialog,
+    EditAccountDialog,
+    ErrorDialog,
+    RestoreDialog,
+)
+from app.ui.screens.icon_preview_screen import IconPreviewScreen
+from app.ui.screens.main_screen import MainScreen
+from app.ui.screens.settings_screen import SettingsScreen
+from app.ui.themes.theme_manager import ThemeManager
+from app.utils.platform_utils import get_user_data_dir
+
 try:
     from plyer import notification
 except ImportError:
     notification = None
-from app.core.config import AppConfig
-from app.services.storage_service import StorageService
-from app.services.auth_service import AuthService
-from app.ui.screens.main_screen import MainScreen
-from app.ui.screens.settings_screen import SettingsScreen
-from app.ui.screens.icon_preview_screen import IconPreviewScreen
-from app.ui.components.dialogs import (
-    AddAccountDialog,
-    EditAccountDialog,
-    BackupDialog,
-    RestoreDialog,
-    ErrorDialog,
-    ConfirmDialog,
-)
-from app.ui.themes.theme_manager import ThemeManager
-from app.utils.platform_utils import get_user_data_dir
-from kivymd.uix.label import MDIcon, MDLabel
-from app.ui.components.custom_widgets import CustomOneLineIconListItem
-from kivy.metrics import dp
 
 class ModernAuthenticatorApp(MDApp):
     def __init__(self, **kwargs):
@@ -41,6 +42,7 @@ class ModernAuthenticatorApp(MDApp):
         
         self.selected_account = None
         self.account_cards = {}
+        self._card_pool = []
         self.dialog = None
         self.file_manager = None
 
@@ -56,12 +58,7 @@ class ModernAuthenticatorApp(MDApp):
         self.screen_manager = ScreenManager()
         
         self.main_screen = MainScreen(self)
-        self.settings_screen = SettingsScreen(self)
-        self.icon_preview_screen = IconPreviewScreen()
-        
         self.screen_manager.add_widget(self.main_screen)
-        self.screen_manager.add_widget(self.settings_screen)
-        self.screen_manager.add_widget(self.icon_preview_screen)
         
         self.refresh_accounts()
         self.start_timer()
@@ -73,27 +70,55 @@ class ModernAuthenticatorApp(MDApp):
 
     def update_codes(self, dt):
         rem = 30 - (int(time.time()) % 30)
-        for name, card in self.account_cards.items():
+        for card in self.account_cards.values():
             try:
-                code = self.auth.get_otp(name)
+                code = self.auth.get_otp(card.name)
                 card.update_code(code, rem)
             except Exception:
-                card.update_code('ERROR', rem)
+                card.update_code("ERROR", rem)
 
-    def refresh_accounts(self):
-        self.main_screen.accounts_layout.clear_widgets()
-        self.account_cards.clear()
+    def refresh_accounts(self, *args):
         self.selected_account = None
-        
         keys = self.auth.get_all_keys()
+
         if not keys:
             self.main_screen.show_empty_message()
+            # Move unused cards to the pool
+            for card in self.account_cards.values():
+                self.main_screen.accounts_layout.remove_widget(card)
+                self._card_pool.append(card)
+            self.account_cards.clear()
             return
-        
+
+        self.main_screen.hide_empty_message()
+
+        # Create a set of current keys for efficient lookup
+        current_keys = set(keys)
+        existing_keys = set(self.account_cards.keys())
+
+        # Remove cards that are no longer in the keys
+        for name in existing_keys - current_keys:
+            card = self.account_cards.pop(name)
+            self.main_screen.accounts_layout.remove_widget(card)
+            self._card_pool.append(card)
+
+        # Add or update cards
         for name in keys:
-            card = self.app_config.ACCOUNT_CARD_CLASS(name, on_select=self.on_account_select)
-            self.account_cards[name] = card
-            self.main_screen.accounts_layout.add_widget(card)
+            if name in self.account_cards:
+                # Card already exists, just update it if necessary
+                card = self.account_cards[name]
+                card.update_theme_colors()
+            else:
+                # Get a card from the pool or create a new one
+                if self._card_pool:
+                    card = self._card_pool.pop()
+                    card.name = name
+                    card.on_select = self.on_account_select
+                else:
+                    card = self.app_config.ACCOUNT_CARD_CLASS(name, on_select=self.on_account_select)
+                
+                self.account_cards[name] = card
+                self.main_screen.accounts_layout.add_widget(card)
 
     def on_account_select(self, name):
         if self.selected_account == name:
@@ -180,12 +205,13 @@ class ModernAuthenticatorApp(MDApp):
         self.dialog.show()
 
     def create_backup(self, directory, filename, password):
-        try:
-            path = Path(directory) / filename
-            self.auth.backup(path, password)
-            self.show_snackbar("Backup created successfully")
-        except Exception as e:
-            self.show_error_dialog(str(e))
+        path = Path(directory) / filename
+        self.auth.backup(
+            path, 
+            password,
+            on_success=lambda: self.show_snackbar("Backup created successfully"),
+            on_error=lambda e: self.show_error_dialog(str(e))
+        )
 
     def restore(self):
         self.file_manager = MDFileManager(
@@ -203,12 +229,16 @@ class ModernAuthenticatorApp(MDApp):
         self.dialog.show()
 
     def restore_backup(self, filepath, password):
-        try:
-            self.auth.restore(Path(filepath), password)
-            self.show_snackbar("Backup restored successfully")
-            self.refresh_accounts()
-        except Exception as e:
-            self.show_error_dialog("Failed to restore - check password and file")
+        self.auth.restore(
+            Path(filepath), 
+            password,
+            on_success=self.on_restore_success,
+            on_error=lambda e: self.show_error_dialog("Failed to restore - check password and file")
+        )
+
+    def on_restore_success(self):
+        self.show_snackbar("Backup restored successfully")
+        self.refresh_accounts()
 
     def exit_file_manager(self, *args):
         if self.file_manager:
@@ -222,10 +252,16 @@ class ModernAuthenticatorApp(MDApp):
         self.dialog.show()
 
     def show_settings(self):
+        if not self.screen_manager.has_screen("settings"):
+            self.settings_screen = SettingsScreen(self)
+            self.screen_manager.add_widget(self.settings_screen)
         self.screen_manager.current = "settings"
         self.screen_manager.transition.direction = "left"
 
     def show_icon_preview(self):
+        if not self.screen_manager.has_screen("icon_preview"):
+            self.icon_preview_screen = IconPreviewScreen()
+            self.screen_manager.add_widget(self.icon_preview_screen)
         self.screen_manager.current = "icon_preview"
         self.screen_manager.transition.direction = "left"
 
@@ -247,7 +283,7 @@ class ModernAuthenticatorApp(MDApp):
         if not text or not text.strip():
             return
 
-        if platform == 'android' and notification:
+        if platform == 'android' and notification is not None and hasattr(notification, "notify") and callable(notification.notify):
             try:
                 notification.notify(
                     title=self.app_config.APP_NAME,

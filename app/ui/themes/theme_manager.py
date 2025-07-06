@@ -1,17 +1,18 @@
 import os
+
+from kivy.logger import Logger
 from kivy.storage.jsonstore import JsonStore
 from kivy.utils import platform
-from kivy.logger import Logger
 
 # Request permissions on Android
 if platform == "android":
     try:
-        from android.permissions import request_permissions, Permission
+        from android.permissions import Permission, request_permissions
+
         # For Android 11+, request MANAGE_EXTERNAL_STORAGE or use scoped storage
-        request_permissions([
-            Permission.READ_EXTERNAL_STORAGE,
-            Permission.WRITE_EXTERNAL_STORAGE
-        ])
+        request_permissions(
+            [Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE]
+        )
     except ImportError:
         Logger.warning("ThemeManager: Android permissions module not available")
 

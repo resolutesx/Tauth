@@ -1,21 +1,24 @@
 from kivy.app import App
+from kivy.clock import Clock
 from kivy.metrics import dp
-from kivymd.uix.screen import MDScreen
-from kivymd.uix.toolbar import MDTopAppBar
 from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.scrollview import MDScrollView
-from kivymd.uix.list import IRightBodyTouch , MDList, OneLineAvatarIconListItem, TwoLineAvatarIconListItem, IconLeftWidget, IconRightWidget, IRightBody, IconRightWidgetWithoutTouch
-from kivymd.uix.label import MDLabel
+from kivymd.uix.button import MDFlatButton, MDRaisedButton
 from kivymd.uix.card import MDCard
 from kivymd.uix.dialog import MDDialog
-from kivymd.uix.button import MDFlatButton, MDRaisedButton, MDIconButton
-from kivymd.uix.snackbar import MDSnackbar, MDSnackbarActionButton
 from kivymd.uix.gridlayout import MDGridLayout
-from kivymd.uix.behaviors import RoundedRectangularElevationBehavior
-from kivy.lang import Builder
-from kivy.factory import Factory
+from kivymd.uix.label import MDLabel
+from kivymd.uix.list import (
+    IRightBodyTouch,
+    IconLeftWidget,
+    IconRightWidget,
+    OneLineAvatarIconListItem,
+    TwoLineAvatarIconListItem,
+)
+from kivymd.uix.screen import MDScreen
+from kivymd.uix.scrollview import MDScrollView
 from kivymd.uix.selectioncontrol import MDCheckbox
-from kivy.clock import Clock
+from kivymd.uix.snackbar import MDSnackbar, MDSnackbarActionButton
+from kivymd.uix.toolbar import MDTopAppBar
 
 class ColorCard(MDCard):
     def __init__(self, color_name, color_code, kivymd_name, on_select=None, **kwargs):
@@ -117,7 +120,7 @@ class SettingsScreen(MDScreen):
         # App Version
         self.version_item = TwoLineAvatarIconListItem(
             text="Version",
-            secondary_text=self.app.app_config.VERSION,
+            secondary_text=getattr(getattr(self.app, "app_config", None), "VERSION", "Unknown"),
             theme_text_color="Primary"
         )
         self.version_item.add_widget(IconLeftWidget(icon="information-outline"))
@@ -297,19 +300,19 @@ class SettingsScreen(MDScreen):
                 padding=dp(8),
                 spacing=dp(8),
             )
-            for display_name, color_code, kivymd_name in colors:
-                color_card = ColorCard(
+            color_grid.children = [
+                ColorCard(
                     color_name=display_name,
                     color_code=color_code,
                     kivymd_name=kivymd_name,
-                    # fill cell horizontally, fixed height
                     size_hint=(1, None),
                     height=dp(56),
-                    elevation=0,        # no shadow
-                    radius=[0],         # optional: square corners
-                    on_select=self.change_theme  # only changes theme
+                    elevation=0,
+                    radius=[0],
+                    on_select=self.change_theme,
                 )
-                color_grid.add_widget(color_card)
+                for display_name, color_code, kivymd_name in colors
+            ]
 
             # Scrollable container
             scroll = MDScrollView(
@@ -368,7 +371,7 @@ class SettingsScreen(MDScreen):
         """Show about dialog"""
         dialog = MDDialog(
             title="About This App",
-            text=f"A modern, Material Design application built with KivyMD.\n\nVersion: {self.app.app_config.VERSION}\n\nDeveloped with ❤️",
+            text=f"A modern, Material Design application built with KivyMD.\n\nVersion: {getattr(getattr(self.app, 'app_config', None), 'VERSION', 'Unknown')}\n\nDeveloped with ❤️",
             buttons=[
                 MDRaisedButton(
                     text="OK",

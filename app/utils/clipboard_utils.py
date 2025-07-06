@@ -1,6 +1,4 @@
-import platform
 from kivy.core.clipboard import Clipboard
-from kivy.utils import platform as kivy_platform
 
 def copy_to_clipboard(text, app=None):
     """

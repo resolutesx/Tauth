@@ -1,12 +1,13 @@
 from kivy.metrics import dp
-from kivy.uix.widget import Widget
-from kivymd.uix.screen import MDScreen
-from kivymd.uix.toolbar import MDTopAppBar
-from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.scrollview import MDScrollView
-from kivymd.uix.label import MDLabel
 from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.widget import Widget
+from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.label import MDLabel
 from kivymd.uix.menu import MDDropdownMenu
+from kivymd.uix.screen import MDScreen
+from kivymd.uix.scrollview import MDScrollView
+from kivymd.uix.toolbar import MDTopAppBar
+
 from app.ui.components.custom_widgets import CustomOneLineIconListItem
 
 class MainScreen(MDScreen):
@@ -15,7 +16,7 @@ class MainScreen(MDScreen):
         self.app = app
         self.name = "main"
         self.layout = MDBoxLayout(orientation="vertical")
-        
+        self.menu_items = None
         self.toolbar = MDTopAppBar(
             title="Tautth",
             md_bg_color=self.app.theme_cls.primary_color,
@@ -95,6 +96,45 @@ class MainScreen(MDScreen):
         self.empty_message_layout.height = 0 # Start with no height
         self.empty_message_layout.disabled = True # Disable interaction
 
+        self.menu_items = [
+                {
+                    "viewclass": "CustomOneLineIconListItem",
+                    "text": "Edit Selected",
+                    "icon": "pencil",
+                    "on_release": lambda: self.app.menu_callback("edit"),
+                },
+                {
+                    "viewclass": "CustomOneLineIconListItem",
+                    "text": "Remove Selected",
+                    "icon": "delete",
+                    "on_release": lambda: self.app.menu_callback("remove"),
+                },
+                {
+                    "viewclass": "CustomOneLineIconListItem",
+                    "text": "Backup Data",
+                    "icon": "content-save",
+                    "on_release": lambda: self.app.menu_callback("backup"),
+                },
+                {
+                    "viewclass": "CustomOneLineIconListItem",
+                    "text": "Restore Data",
+                    "icon": "folder",
+                    "on_release": lambda: self.app.menu_callback("restore"),
+                },
+                {
+                    "viewclass": "CustomOneLineIconListItem",
+                    "text": "Settings",
+                    "icon": "cog",
+                    "on_release": lambda: self.app.menu_callback("settings"),
+                },
+                {
+                    "viewclass": "CustomOneLineIconListItem",
+                    "text": "Icon Preview",
+                    "icon": "eye",
+                    "on_release": lambda: self.app.menu_callback("icon_preview"),
+                },
+            ]
+
     def show_menu(self, instance):
         # Determine icon color and background color based on theme
         if self.app and self.app.theme_cls:
@@ -108,54 +148,13 @@ class MainScreen(MDScreen):
             icon_color = [0, 0, 0, 1]  # Default to black
             bg_color = [0.90, 0.90, 0.90, 1]  # Default to light gray
         
-        menu_items = [
-            {
-                "viewclass": "CustomOneLineIconListItem",
-                "text": "Edit Selected",
-                "icon": "pencil",
-                "icon_color": icon_color,
-                "on_release": lambda: self.app.menu_callback("edit"),
-            },
-            {
-                "viewclass": "CustomOneLineIconListItem",
-                "text": "Remove Selected",
-                "icon": "delete",
-                "icon_color": icon_color,
-                "on_release": lambda: self.app.menu_callback("remove"),
-            },
-            {
-                "viewclass": "CustomOneLineIconListItem",
-                "text": "Backup Data",
-                "icon": "content-save",
-                "icon_color": icon_color,
-                "on_release": lambda: self.app.menu_callback("backup"),
-            },
-            {
-                "viewclass": "CustomOneLineIconListItem",
-                "text": "Restore Data",
-                "icon": "folder",
-                "icon_color": icon_color,
-                "on_release": lambda: self.app.menu_callback("restore"),
-            },
-            {
-                "viewclass": "CustomOneLineIconListItem",
-                "text": "Settings",
-                "icon": "cog",
-                "icon_color": icon_color,
-                "on_release": lambda: self.app.menu_callback("settings"),
-            },
-            {
-                "viewclass": "CustomOneLineIconListItem",
-                "text": "Icon Preview",
-                "icon": "eye",
-                "icon_color": icon_color,
-                "on_release": lambda: self.app.menu_callback("icon_preview"),
-            },
-        ]
-        
+        if self.menu_items:
+            for item in self.menu_items:
+                item["icon_color"] = icon_color
+
         self.menu = MDDropdownMenu(
             caller=instance,
-            items=menu_items,
+            items=self.menu_items,
             elevation=0,
             md_bg_color=bg_color
         )

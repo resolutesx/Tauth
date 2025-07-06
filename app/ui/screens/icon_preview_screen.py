@@ -2,7 +2,6 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
-from kivymd.app import MDApp
 from kivymd.icon_definitions import md_icons
 from kivymd.uix.label import MDIcon
 from kivymd.uix.screen import MDScreen

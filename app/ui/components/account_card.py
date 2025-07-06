@@ -1,14 +1,14 @@
 from kivy.animation import Animation
 from kivy.clock import Clock
 from kivy.metrics import dp
+from kivy.uix.progressbar import ProgressBar
 from kivy.uix.widget import Widget
+from kivymd.app import MDApp
 from kivymd.theming import ThemableBehavior
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.card import MDCard
 from kivymd.uix.label import MDLabel
-from kivy.uix.progressbar import ProgressBar
-from kivymd.uix.snackbar.snackbar import MDSnackbar
-from kivymd.app import MDApp
+
 from app.utils.clipboard_utils import copy_to_clipboard
 
 class AccountCard(MDCard, ThemableBehavior):
@@ -290,14 +290,17 @@ class AccountCard(MDCard, ThemableBehavior):
     def update_code(self, code, ttl):
         """Update the displayed code and TTL"""
         try:
-            self.raw_code = code
-            self.code_label.text = self.format_code(code)
+            if self.raw_code != code:
+                self.raw_code = code
+                self.code_label.text = self.format_code(code)
+
             self.ttl_label.text = f"{max(0, ttl)}s"
-            
-            # Update progress bar with bounds checking
+
+            # Update progress bar with bounds checking and reduced frequency
             progress_value = max(0, min(100, ttl / 30 * 100))
-            self.progress_bar.value = progress_value
-            
+            if abs(self.progress_bar.value - progress_value) > 1: # Update only if change is significant
+                self.progress_bar.value = progress_value
+
         except Exception as e:
             print(f"Error updating code: {e}")
 
