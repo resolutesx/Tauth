@@ -1,0 +1,12 @@
+.env
+
+*.encrypted
+accounts.encrypted
+
+-p
+.gradle/
+.kotlin/
+.vscode/
+gradle/
+accounts.json
+java_pid23756.hprof
